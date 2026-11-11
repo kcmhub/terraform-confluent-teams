@@ -1,0 +1,33 @@
+# Terraform working directories and plugin caches
+.terraform/
+.terraform.d/
+
+# State files hold API key secrets: never commit them
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Plans can contain secrets too
+*.tfplan
+tfplan
+
+# Variable files may contain real IDs or secrets. Only the example is versioned.
+*.tfvars
+*.tfvars.json
+!terraform/example.tfvars
+
+# Local overrides and CLI configuration
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Logs and editor files
+crash.log
+crash.*.log
+.DS_Store
+.idea/
+.vscode/
+*.swp
