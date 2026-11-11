@@ -1,0 +1,6 @@
+description: Takes orders and publishes their status
+produces:
+  - orders.order.created
+  - orders.order.status
+consumes:
+  - payments.payment.settled # owned by the payments team

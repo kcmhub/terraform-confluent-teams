@@ -1,0 +1,3 @@
+# No partitions: uses default_partitions of the environment.
+config:
+  cleanup.policy: delete

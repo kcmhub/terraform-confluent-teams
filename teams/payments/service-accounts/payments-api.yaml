@@ -1,0 +1,8 @@
+# The file name is the service account name. Its display name in Confluent
+# Cloud is "<environment_name>-payments-payments-api".
+description: Authorizes payments for new orders
+produces:
+  - payments.payment.authorized
+consumes:
+  - orders.order.created
+# consumer_group_prefix defaults to "<team>.<name>": payments.payments-api

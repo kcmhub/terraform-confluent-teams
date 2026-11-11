@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PaymentSettled",
+  "description": "A payment was settled with the payment provider.",
+  "type": "object",
+  "properties": {
+    "paymentId": { "type": "string" },
+    "orderId": { "type": "string" },
+    "amountMinor": { "type": "integer", "description": "Amount in minor units (cents)." },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "settledAt": { "type": "string", "format": "date-time" }
+  },
+  "required": ["paymentId", "orderId", "amountMinor", "currency", "settledAt"]
+}

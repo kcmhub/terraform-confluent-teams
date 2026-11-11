@@ -1,0 +1,3 @@
+description: Serves the latest status of each order
+consumes:
+  - orders.order.status

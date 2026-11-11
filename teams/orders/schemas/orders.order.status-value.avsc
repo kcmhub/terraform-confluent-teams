@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "OrderStatus",
+  "namespace": "io.kcmhub.examples.orders",
+  "doc": "Latest status of an order (compacted topic, keyed by order ID).",
+  "fields": [
+    { "name": "orderId", "type": "string" },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "Status",
+        "symbols": ["CREATED", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "UNKNOWN"],
+        "default": "UNKNOWN"
+      }
+    },
+    { "name": "updatedAt", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

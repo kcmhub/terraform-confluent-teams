@@ -1,0 +1,4 @@
+# Latest status per order ID
+partitions: 3
+config:
+  cleanup.policy: compact

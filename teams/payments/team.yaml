@@ -1,0 +1,4 @@
+# Team "payments": authorizes and settles payments.
+# owner_email is written as topic owner metadata when owner = true.
+description: Payment authorization and settlement
+owner_email: payments-team@example.com

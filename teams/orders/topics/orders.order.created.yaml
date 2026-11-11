@@ -1,0 +1,4 @@
+partitions: 6
+config:
+  cleanup.policy: delete
+  retention.ms: 604800000 # 7 days

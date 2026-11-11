@@ -1,0 +1,5 @@
+# The file name is the topic name. It must start with "<team>.".
+partitions: 6
+config:
+  cleanup.policy: delete
+  retention.ms: 604800000 # 7 days

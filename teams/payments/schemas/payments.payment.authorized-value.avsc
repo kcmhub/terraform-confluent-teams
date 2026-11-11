@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "PaymentAuthorized",
+  "namespace": "io.kcmhub.examples.payments",
+  "doc": "A payment was authorized for an order.",
+  "fields": [
+    { "name": "paymentId", "type": "string" },
+    { "name": "orderId", "type": "string" },
+    { "name": "amountMinor", "type": "long", "doc": "Amount in minor units (cents)." },
+    { "name": "currency", "type": "string", "doc": "ISO 4217 currency code." },
+    { "name": "authorizedAt", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    { "name": "method", "type": ["null", "string"], "default": null }
+  ]
+}

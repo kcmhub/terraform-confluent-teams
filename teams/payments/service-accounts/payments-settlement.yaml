@@ -1,0 +1,6 @@
+description: Settles authorized payments
+produces:
+  - payments.payment.settled
+consumes:
+  - payments.payment.authorized
+consumer_group_prefix: payments.settlement

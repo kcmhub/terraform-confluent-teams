@@ -1,0 +1,5 @@
+# The file name is the subject name: <topic>-value or <topic>-key.
+# The schema itself is in the file next to it: <subject>.avsc for AVRO,
+# <subject>.json for JSON.
+format: AVRO
+compatibility: BACKWARD
