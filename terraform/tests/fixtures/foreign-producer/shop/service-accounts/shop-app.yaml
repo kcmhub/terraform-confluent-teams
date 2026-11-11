@@ -1,0 +1,2 @@
+produces:
+  - billing.invoice.created

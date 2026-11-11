@@ -1,0 +1,5 @@
+{
+  "type": "record",
+  "name": "Example",
+  "fields": [{ "name": "id", "type": "string" }]
+}
