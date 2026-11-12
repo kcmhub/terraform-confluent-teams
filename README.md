@@ -95,7 +95,8 @@ Validation runs offline and is covered by `terraform test` with a mocked provide
 
 Prerequisites:
 
-- Terraform 1.7 or later.
+- Terraform 1.10 or later.
+- An S3 bucket for the state, with versioning and encryption, and AWS credentials allowed to read and write it.
 - A Confluent Cloud environment with Stream Governance (Schema Registry) and a Kafka cluster that supports RBAC on topics (Standard, Enterprise or Dedicated, not Basic).
 - A **Cloud API key** allowed to create service accounts, API keys and role bindings, for example owned by a service account with `OrganizationAdmin`.
 - An existing **admin Kafka API key** and **admin Schema Registry API key** that Terraform uses to manage topics and schemas, for example owned by a `terraform-admin` service account with `CloudClusterAdmin` on the cluster and `ResourceOwner` on all subjects:
@@ -120,8 +121,9 @@ export TF_VAR_kafka_api_secret="<kafka api secret>"
 export TF_VAR_schema_registry_api_key="<schema registry api key>"
 export TF_VAR_schema_registry_api_secret="<schema registry api secret>"
 
-cp example.tfvars dev.tfvars   # then replace env-replaceme and lkc-replaceme
-terraform init
+cp example.tfvars dev.tfvars                   # then replace env-replaceme and lkc-replaceme
+cp example.s3.tfbackend dev.s3.tfbackend       # then set your bucket and region
+terraform init -backend-config=dev.s3.tfbackend
 terraform plan  -var-file=dev.tfvars
 terraform apply -var-file=dev.tfvars
 
@@ -136,35 +138,81 @@ Things to know:
 
 ## State
 
-The state holds the secrets of every API key Terraform creates. Never commit it (`.gitignore` excludes it), keep it in a remote backend with encryption and restricted access, and use **one state per environment**.
+The state is stored in S3 ([`backend.tf`](terraform/backend.tf)), one state file per environment, with S3 native locking (`use_lockfile`). It holds the secrets of every API key Terraform creates: keep the bucket private, encrypted and versioned, and give access only to the people and roles that run Terraform.
 
-No backend is configured, so out of the box Terraform writes a local `terraform/terraform.tfstate`. To use a remote backend, declare its type in `terraform/backend.tf` and keep its settings in one file per environment. For example with S3:
+The backend settings are passed at init time, from a file per environment ([`example.s3.tfbackend`](terraform/example.s3.tfbackend)) or by the GitHub Actions workflow. `terraform validate` and `terraform test` do not need them: `terraform init -backend=false`.
 
-```hcl
-# terraform/backend.tf
-terraform {
-  backend "s3" {}
+**Switching environment means switching state.** Run `terraform init -reconfigure -backend-config=prod.s3.tfbackend` before using `prod.tfvars`. Applying `prod.tfvars` with the dev state would replace the dev resources with the prod ones, deleting the dev topics and their data.
+
+To use another backend (`azurerm`, `gcs`, HCP Terraform), replace `terraform/backend.tf` and the workflow init step.
+
+## GitHub Actions
+
+Two workflows run Terraform for you:
+
+- [`ci.yml`](.github/workflows/ci.yml), on every push and pull request: fmt, validate, the offline tests and tflint. No credentials.
+- [`terraform.yml`](.github/workflows/terraform.yml), when `teams/` or `terraform/` change:
+  - pull request: plan `dev` and `prod`. Each plan is shown in the job summary, and every resource to be destroyed raises a warning;
+  - merge to `main`: apply `dev`, wait for an approval, then apply `prod`.
+
+Terraform finds everything in GitHub variables and secrets: no tfvars or backend file is needed in CI. The workflow does nothing until `TF_STATE_BUCKET` is set.
+
+| Where | Name | Value |
+|-------|------|-------|
+| Repository variables | `TF_STATE_BUCKET` | S3 bucket of the state (turns the workflow on) |
+| | `AWS_REGION` | Region of the bucket |
+| | `TF_STATE_PREFIX` | Optional, default `terraform-confluent-teams`: the state of an environment is `<prefix>/<environment>.tfstate` |
+| Environments `dev` and `prod`, variables | `AWS_ROLE_ARN` | IAM role that the workflow assumes for this environment |
+| | `CONFLUENT_ENVIRONMENT_ID` | `env-...` |
+| | `CONFLUENT_KAFKA_CLUSTER_ID` | `lkc-...` |
+| | `DEFAULT_PARTITIONS` | Optional, default `3` |
+| | `OWNER_METADATA` | Optional, `true` to set the owner metadata, default `false` |
+| Environments `dev` and `prod`, secrets | `CONFLUENT_CLOUD_API_KEY`, `CONFLUENT_CLOUD_API_SECRET` | Cloud API key |
+| | `KAFKA_API_KEY`, `KAFKA_API_SECRET` | Admin Kafka API key of the cluster |
+| | `SCHEMA_REGISTRY_API_KEY`, `SCHEMA_REGISTRY_API_SECRET` | Admin Schema Registry API key |
+| Environment `prod-approval` | Required reviewers | Who approves the apply to `prod`. No variable, no secret. |
+
+The GitHub environment name is also the `environment_name` of the configuration, the prefix of the service account display names (`dev-payments-payments-api`).
+
+AWS access uses OpenID Connect: GitHub never stores an AWS key. Add the GitHub OIDC provider (`token.actions.githubusercontent.com`, audience `sts.amazonaws.com`) to your AWS account, then create one role per environment that only that environment can assume:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": { "Federated": "arn:aws:iam::<aws-account-id>:oidc-provider/token.actions.githubusercontent.com" },
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "repo:<owner>/<repo>:environment:dev"
+      }
+    }
+  }]
 }
 ```
 
-```hcl
-# terraform/dev.s3.tfbackend
-bucket       = "my-terraform-states"
-key          = "confluent/teams/dev.tfstate"
-region       = "eu-west-1"
-encrypt      = true
-use_lockfile = true # Terraform 1.10 or later
+with access to its own state file and lock file only:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::<bucket>" },
+    { "Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], "Resource": "arn:aws:s3:::<bucket>/terraform-confluent-teams/dev.tfstate*" }
+  ]
+}
 ```
 
-```bash
-terraform init -reconfigure -backend-config=dev.s3.tfbackend
-terraform plan  -var-file=dev.tfvars
-terraform apply -var-file=dev.tfvars
-```
+Good to know:
 
-The same pattern works with the `azurerm` and `gcs` backends: only the settings change.
-
-**Switching environment means switching state.** Run `terraform init -reconfigure -backend-config=<env>.s3.tfbackend` before using `<env>.tfvars`. Applying `prod.tfvars` with the dev state would replace the dev resources with the prod ones, deleting the dev topics and their data.
+- Plans of pull requests do not lock the state, so they never block an apply. Applies of the same environment run one at a time.
+- Pull requests from forks get no secrets and are not planned.
+- The apply re-plans before applying: the approver of `prod` should read the `prod` plan of the pull request, or of the `apply-prod` job summary afterwards.
+- Anyone who can push a branch can change a workflow and use the `dev` and `prod` secrets. To prevent that, allow only `main` in the deployment branches of the `prod` environment; pull requests then cannot plan `prod`.
+- In a public repository, job summaries are public. Sensitive values are redacted in the plan, but resource names are not: run your real teams from a private copy.
+- The application API keys created in CI stay in the state: read them with `terraform output -json client_credentials` after `terraform init -backend-config=<env>.s3.tfbackend`.
 
 ## Owner metadata (`owner = true`)
 

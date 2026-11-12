@@ -1,0 +1,73 @@
+# Pull request: plan dev and prod, shown in the job summary.
+# Merge to main: apply dev, wait for an approval, apply prod.
+#
+# Nothing runs until the repository variable TF_STATE_BUCKET is set: see
+# "GitHub Actions" in the README for the full setup.
+
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - teams/**
+      - terraform/**
+      - .github/workflows/terraform*.yml
+  push:
+    branches: [main]
+    paths:
+      - teams/**
+      - terraform/**
+      - .github/workflows/terraform*.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    # Pull requests from forks get no secrets: they are not planned
+    if: >-
+      github.event_name == 'pull_request'
+      && vars.TF_STATE_BUCKET != ''
+      && github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      environment: ${{ matrix.environment }}
+    secrets: inherit
+
+  apply-dev:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.TF_STATE_BUCKET != ''
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      environment: dev
+      apply: true
+    secrets: inherit
+
+  approve-prod:
+    # The prod-approval environment holds no secret, only required reviewers
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    environment: prod-approval
+    steps:
+      - run: echo "Apply to prod approved"
+
+  apply-prod:
+    needs: approve-prod
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/terraform-run.yml
+    with:
+      environment: prod
+      apply: true
+    secrets: inherit

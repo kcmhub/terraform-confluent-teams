@@ -1,0 +1,7 @@
+# Copy to a file of your own (for example dev.s3.tfbackend, which git ignores)
+# and replace the placeholders. Use one key per environment.
+bucket       = "replaceme-terraform-states"
+key          = "terraform-confluent-teams/dev.tfstate"
+region       = "eu-west-1"
+encrypt      = true
+use_lockfile = true

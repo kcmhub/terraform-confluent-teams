@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- S3 backend with native locking, one state file per environment, and `terraform/example.s3.tfbackend`.
+- GitHub Actions workflow `terraform.yml`: plan `dev` and `prod` on pull requests, apply `dev` then `prod` after an approval on merge to `main`. Settings come from GitHub variables and secrets, AWS access uses OpenID Connect.
+
+### Changed
+
+- Terraform 1.10 or later is required, for S3 native locking.
+
 ## [0.1.0] - 2026-11-11
 
 ### Added

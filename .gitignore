@@ -16,6 +16,10 @@ tfplan
 *.tfvars.json
 !terraform/example.tfvars
 
+# Backend settings of each environment. Only the example is versioned.
+*.tfbackend
+!terraform/example.s3.tfbackend
+
 # Local overrides and CLI configuration
 override.tf
 override.tf.json

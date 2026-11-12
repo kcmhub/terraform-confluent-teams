@@ -1,0 +1,99 @@
+# Plans, and optionally applies, the configuration for one environment.
+# Called by terraform.yml. Every setting comes from GitHub variables and
+# secrets: see "GitHub Actions" in the README.
+
+name: terraform-run
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub environment that holds the variables and secrets (dev, prod).
+        type: string
+        required: true
+      apply:
+        description: Apply the plan after showing it.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  terraform:
+    name: ${{ inputs.apply && 'apply' || 'plan' }} ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      # One apply at a time per environment; a newer plan replaces an older one.
+      group: terraform-${{ inputs.environment }}-${{ inputs.apply && 'apply' || github.ref }}
+      cancel-in-progress: ${{ !inputs.apply }}
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      CONFLUENT_CLOUD_API_KEY: ${{ secrets.CONFLUENT_CLOUD_API_KEY }}
+      CONFLUENT_CLOUD_API_SECRET: ${{ secrets.CONFLUENT_CLOUD_API_SECRET }}
+      TF_VAR_kafka_api_key: ${{ secrets.KAFKA_API_KEY }}
+      TF_VAR_kafka_api_secret: ${{ secrets.KAFKA_API_SECRET }}
+      TF_VAR_schema_registry_api_key: ${{ secrets.SCHEMA_REGISTRY_API_KEY }}
+      TF_VAR_schema_registry_api_secret: ${{ secrets.SCHEMA_REGISTRY_API_SECRET }}
+      TF_VAR_environment_id: ${{ vars.CONFLUENT_ENVIRONMENT_ID }}
+      TF_VAR_kafka_cluster_id: ${{ vars.CONFLUENT_KAFKA_CLUSTER_ID }}
+      TF_VAR_environment_name: ${{ inputs.environment }}
+      TF_VAR_default_partitions: ${{ vars.DEFAULT_PARTITIONS || '3' }}
+      TF_VAR_owner: ${{ vars.OWNER_METADATA || 'false' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      # OpenID Connect: no AWS key is stored in GitHub
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: "1.14.6"
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: >-
+          terraform init
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=${{ vars.TF_STATE_PREFIX || 'terraform-confluent-teams' }}/${{ inputs.environment }}.tfstate"
+          -backend-config="region=${{ vars.AWS_REGION }}"
+          -backend-config="encrypt=true"
+          -backend-config="use_lockfile=true"
+
+      # Plans of pull requests only read the state: no lock, so they never
+      # block an apply.
+      - name: terraform plan
+        run: terraform plan -out=tfplan ${{ !inputs.apply && '-lock=false' || '' }}
+
+      - name: Show the plan
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          # Sensitive values are redacted in this text output
+          terraform show -no-color tfplan > "$RUNNER_TEMP/plan.txt"
+          {
+            echo "### Plan for \`$ENVIRONMENT\`"
+            echo '```'
+            head -c 500000 "$RUNNER_TEMP/plan.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Removing or renaming a topic file deletes the topic and its data
+          terraform show -json tfplan \
+            | jq -r '.resource_changes[] | select(.change.actions | index("delete")) | .address' \
+            | while read -r address; do
+                echo "::warning title=Destroy in $ENVIRONMENT::$address will be destroyed"
+              done
+
+      - name: terraform apply
+        if: inputs.apply
+        run: terraform apply tfplan
