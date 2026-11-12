@@ -129,7 +129,7 @@ Use one state per environment, in a remote backend with encryption and restricte
 
 Things to know:
 
-- **Topics are protected** with `prevent_destroy`: removing or renaming a topic file makes the plan fail instead of deleting data. To delete a topic on purpose, remove its file and set `prevent_destroy = false` in `terraform/topics.tf` in the same pull request, apply, then restore it.
+- **Removing a topic file deletes the topic and its data.** Renaming a topic file does the same and creates a new, empty topic. Always read the plan before applying and look for `destroy` on `confluent_kafka_topic`. If you prefer the plan to fail instead, add `lifecycle { prevent_destroy = true }` to the topic resource in `terraform/topics.tf`.
 - Renaming a service account file creates a new service account and new API keys.
 - The admin keys are passed in rather than created by Terraform, so the configuration has no bootstrap step and the same keys can be rotated outside of it.
 

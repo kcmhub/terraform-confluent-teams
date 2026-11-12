@@ -1,4 +1,5 @@
-# One topic per teams/<team>/topics/<topic>.yaml file.
+# One topic per teams/<team>/topics/<topic>.yaml file. Removing the file
+# deletes the topic and its data: review the plan before applying.
 
 resource "confluent_kafka_topic" "this" {
   for_each = local.topics
@@ -15,12 +16,6 @@ resource "confluent_kafka_topic" "this" {
   credentials {
     key    = var.kafka_api_key
     secret = var.kafka_api_secret
-  }
-
-  lifecycle {
-    # Removing a topic file must not delete the topic and its data by
-    # accident: the plan fails instead. See the README to delete on purpose.
-    prevent_destroy = true
   }
 
   depends_on = [terraform_data.validation]
