@@ -1,5 +1,8 @@
 # terraform-confluent-teams
 
+[![ci](https://github.com/kcmhub/terraform-confluent-teams/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kcmhub/terraform-confluent-teams/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/kcmhub/terraform-confluent-teams)](LICENSE)
+
 Manage the Kafka resources of several teams on an **existing** Confluent Cloud cluster from small YAML files, one file per resource, with the official [`confluentinc/confluent`](https://registry.terraform.io/providers/confluentinc/confluent/latest/docs) Terraform provider.
 
 Each team owns a folder. Adding a topic, an application or a schema is a pull request that adds one file, and the files are validated before Terraform plans anything.
