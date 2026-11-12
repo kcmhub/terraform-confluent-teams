@@ -128,13 +128,43 @@ terraform apply -var-file=dev.tfvars
 terraform output -json client_credentials   # API keys of each application
 ```
 
-Use one state per environment, in a remote backend with encryption and restricted access: the state contains the API key secrets.
-
 Things to know:
 
 - **Removing a topic file deletes the topic and its data.** Renaming a topic file does the same and creates a new, empty topic. Always read the plan before applying and look for `destroy` on `confluent_kafka_topic`. If you prefer the plan to fail instead, add `lifecycle { prevent_destroy = true }` to the topic resource in `terraform/topics.tf`.
 - Renaming a service account file creates a new service account and new API keys.
 - The admin keys are passed in rather than created by Terraform, so the configuration has no bootstrap step and the same keys can be rotated outside of it.
+
+## State
+
+The state holds the secrets of every API key Terraform creates. Never commit it (`.gitignore` excludes it), keep it in a remote backend with encryption and restricted access, and use **one state per environment**.
+
+No backend is configured, so out of the box Terraform writes a local `terraform/terraform.tfstate`. To use a remote backend, declare its type in `terraform/backend.tf` and keep its settings in one file per environment. For example with S3:
+
+```hcl
+# terraform/backend.tf
+terraform {
+  backend "s3" {}
+}
+```
+
+```hcl
+# terraform/dev.s3.tfbackend
+bucket       = "my-terraform-states"
+key          = "confluent/teams/dev.tfstate"
+region       = "eu-west-1"
+encrypt      = true
+use_lockfile = true # Terraform 1.10 or later
+```
+
+```bash
+terraform init -reconfigure -backend-config=dev.s3.tfbackend
+terraform plan  -var-file=dev.tfvars
+terraform apply -var-file=dev.tfvars
+```
+
+The same pattern works with the `azurerm` and `gcs` backends: only the settings change.
+
+**Switching environment means switching state.** Run `terraform init -reconfigure -backend-config=<env>.s3.tfbackend` before using `<env>.tfvars`. Applying `prod.tfvars` with the dev state would replace the dev resources with the prod ones, deleting the dev topics and their data.
 
 ## Owner metadata (`owner = true`)
 
